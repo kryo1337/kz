@@ -29,6 +29,8 @@ export class PlayerController {
   static readonly JUMP_IMPULSE = 6.0;
   static readonly EYE_HEIGHT = 0.8;
   static readonly GROUND_CHECK_DISTANCE = 1.55;
+  static readonly SURF_MAX_ANGLE = Math.PI / 4;
+  static readonly SURF_STICK_FORCE = 40.0;
 
   static readonly SENSITIVITY_SCALE = 0.0005;
 
@@ -46,11 +48,18 @@ export class PlayerController {
   private yaw: number = 0;
 
   private isGrounded: boolean = false;
+  private isSurfing: boolean = false;
+  private surfNormal = new THREE.Vector3();
 
   private _tempVec = new THREE.Vector3();
   private _tempVec2 = new THREE.Vector3();
   private _tempVec3 = new THREE.Vector3();
   private _ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
+
+  private _euler = new THREE.Euler(0, 0, 0, 'YXZ');
+  private _surfCheckShape = new RAPIER.Capsule(0.9, 0.45);
+  private _downAxis = { x: 0, y: -1, z: 0 };
+  private _identityRot = { x: 0, y: 0, z: 0, w: 1 };
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -131,8 +140,9 @@ export class PlayerController {
 
   public update(dt: number) {
     this.updateInputState();
-    this.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    this.checkGrounded();
+    this._euler.set(this.pitch, this.yaw, 0, 'YXZ');
+    this.camera.quaternion.setFromEuler(this._euler);
+    this.scanSurroundings();
 
     if (this.body.translation().y < -20.0) {
       this.respawn();
@@ -144,29 +154,50 @@ export class PlayerController {
     const forward = this._tempVec.set(0, 0, -1).applyAxisAngle(this._tempVec3.set(0, 1, 0), this.yaw);
     const right = this._tempVec2.set(-1, 0, 0).applyAxisAngle(this._tempVec3.set(0, 1, 0), this.yaw);
 
-    const wishDir = this._tempVec3.set(0, 0, 0)
+    let wishDir = this._tempVec3.set(0, 0, 0)
       .addScaledVector(forward, this.input.forward)
       .addScaledVector(right, -this.input.right)
       .normalize();
 
-    const hVel = { x: vel.x, z: vel.z };
-    let vVel = vel.y;
+    if (this.isSurfing) {
+      const dot = wishDir.dot(this.surfNormal);
+      wishDir.sub(this._tempVec.copy(this.surfNormal).multiplyScalar(dot)).normalize();
 
-    if (this.isGrounded) {
+      this.accelerate(vel, wishDir, this.config.airLimit, this.config.airAcceleration, dt);
+
+      const vDot = vel.x * this.surfNormal.x + vel.y * this.surfNormal.y + vel.z * this.surfNormal.z;
+      if (vDot < 0) {
+        const sx = this.surfNormal.x * vDot;
+        const sy = this.surfNormal.y * vDot;
+        const sz = this.surfNormal.z * vDot;
+        vel.x -= sx;
+        vel.y -= sy;
+        vel.z -= sz;
+      }
+
+      const currentTotalSpeed = this._tempVec2.set(vel.x, vel.y, vel.z).length();
+      if (currentTotalSpeed > 1.0) {
+        const stickForceVec = this._tempVec.copy(this.surfNormal).multiplyScalar(-PlayerController.SURF_STICK_FORCE * dt);
+        vel.x += stickForceVec.x;
+        vel.y += stickForceVec.y;
+        vel.z += stickForceVec.z;
+      }
+
+    } else if (this.isGrounded) {
       const isJumping = this.input.jump && this.config.autoJump;
-      if (!isJumping) this.applyFriction(hVel, dt);
+      if (!isJumping) this.applyFriction(vel, dt);
 
-      this.accelerate(hVel, wishDir, this.config.groundLimit, this.config.groundAcceleration, dt);
+      this.accelerate(vel, wishDir, this.config.groundLimit, this.config.groundAcceleration, dt);
 
       if (isJumping) {
-        vVel = this.config.jumpImpulse;
+        vel.y = this.config.jumpImpulse;
         this.isGrounded = false;
       }
     } else {
-      this.accelerate(hVel, wishDir, this.config.airLimit, this.config.airAcceleration, dt);
+      this.accelerate(vel, wishDir, this.config.airLimit, this.config.airAcceleration, dt);
     }
 
-    this.body.setLinvel({ x: hVel.x, y: vVel, z: hVel.z }, true);
+    this.body.setLinvel(vel, true);
   }
 
   public syncCamera() {
@@ -188,21 +219,65 @@ export class PlayerController {
     this.input.jump = this.keys.has('jump');
   }
 
-  private checkGrounded() {
+  private scanSurroundings() {
+    this.isGrounded = false;
+    this.isSurfing = false;
+    this.surfNormal.set(0, 0, 0);
+
     const pos = this.body.translation();
+
     this._ray.origin.x = pos.x;
     this._ray.origin.y = pos.y;
     this._ray.origin.z = pos.z;
+    this._ray.dir = this._downAxis;
 
-    const hit = this.world.castRay(
+    const rayHit = this.world.castRayAndGetNormal(
       this._ray,
       PlayerController.GROUND_CHECK_DISTANCE,
       true,
       undefined,
       undefined,
-      this.collider
+      undefined,
+      this.body
     );
-    this.isGrounded = !!hit;
+
+    if (rayHit) {
+      const n = rayHit.normal;
+      const slopeAngle = Math.acos(THREE.MathUtils.clamp(n.y, -1, 1));
+
+      if (slopeAngle < PlayerController.SURF_MAX_ANGLE) {
+        this.isGrounded = true;
+        return;
+      }
+    }
+
+    const shapeHit = this.world.castShape(
+      pos,
+      this._identityRot,
+      this._downAxis,
+      this._surfCheckShape,
+      1.0,
+      4294967295,
+      true,
+      undefined,
+      this.collider.handle
+    );
+
+    if (shapeHit) {
+      const hit = shapeHit as any;
+      const n = hit.normal1 || hit.normal;
+
+      if (!n) return;
+
+      if (Math.abs(n.x) < 0.0001 && Math.abs(n.y) < 0.0001 && Math.abs(n.z) < 0.0001) return;
+
+      const slopeAngle = Math.acos(THREE.MathUtils.clamp(n.y, -1, 1));
+
+      if (slopeAngle >= PlayerController.SURF_MAX_ANGLE && slopeAngle < Math.PI / 2 + 0.1) {
+        this.isSurfing = true;
+        this.surfNormal.set(n.x, n.y, n.z);
+      }
+    }
   }
 
   private applyFriction(vel: { x: number, z: number }, dt: number) {

@@ -104,8 +104,37 @@ function createBhopCourse() {
   });
 }
 
+function createSurfRamps() {
+  const size = [10, 1, 30];
+  const color = 0xe0b0ff;
+
+  const ramps = [
+    { pos: [2, 0, 65], rotZ: Math.PI / 4 },
+    { pos: [-2, 0, 100], rotZ: -Math.PI / 4 },
+    { pos: [2, 0, 140], rotZ: Math.PI / 4 },
+    { pos: [-2, 0, 190], rotZ: -Math.PI / 4 },
+    { pos: [2, 0, 250], rotZ: Math.PI / 4 }
+  ];
+
+  ramps.forEach(r => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(size[0], size[1], size[2]), new THREE.MeshStandardMaterial({ color }));
+    mesh.position.set(r.pos[0], r.pos[1], r.pos[2]);
+    mesh.rotation.z = r.rotZ;
+    scene.add(mesh);
+
+    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, r.rotZ));
+    const body = world.createRigidBody(
+      RAPIER.RigidBodyDesc.fixed()
+        .setTranslation(r.pos[0], r.pos[1], r.pos[2])
+        .setRotation({ x: q.x, y: q.y, z: q.z, w: q.w })
+    );
+    world.createCollider(RAPIER.ColliderDesc.cuboid(size[0] / 2, size[1] / 2, size[2] / 2), body);
+  });
+}
+
 createGround();
 createBhopCourse();
+createSurfRamps();
 
 // --- PLAYER ---
 const player = new PlayerController(camera, document.body, world, {
