@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
@@ -11,15 +13,6 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
 }
 
 body {
@@ -39,80 +32,126 @@ canvas {
   height: 100%;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.vanilla:hover {
-  filter: drop-shadow(0 0 2em #3178c6aa);
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
 #crosshair {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   background-color: #ffffff;
-  border: 3px solid #000000;
+  border: 2px solid #000000;
   pointer-events: none;
   z-index: 1000;
+}
+
+.menu-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2000;
+
+  width: 500px;
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  text-align: center;
+
+  background-color: rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 0;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  
+  font-family: 'JetBrains Mono', monospace;
+  color: #ffffff;
+
+  transition: opacity 0.1s ease-out;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.hidden {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.menu-title {
+  font-size: 2em;
+  margin-bottom: 20px;
+  color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 700;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.8);
+}
+
+.menu-btn {
+  width: 100%;
+  padding: 15px;
+  
+  background-color: rgba(0, 0, 0, 0.6); 
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  backdrop-filter: none; 
+  border-radius: 0;
+
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.9em;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-shadow: none;
+  cursor: pointer;
+  
+  transition: all 0.2s ease;
+}
+
+.menu-btn:focus {
+  outline: none;
+}
+
+.menu-btn:focus-visible {
+  outline: none;
+  border-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+}
+
+.menu-btn:hover {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: 20px;
+  
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.1em;
+  color: #ffffff;
+  text-shadow: none;
+}
+
+#sens {
+  flex-grow: 1;
+  margin: 0 15px;
+}
+
+.hud {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: white;
+  font-family: monospace;
+  font-size: 20px;
+  font-weight: bold;
+  text-shadow: 2px 2px 0 #000;
+  white-space: pre;
+  pointer-events: none;
 }

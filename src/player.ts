@@ -33,6 +33,15 @@ export class PlayerController {
   static readonly SURF_STICK_FORCE = 40.0;
 
   static readonly SENSITIVITY_SCALE = 0.0005;
+  static readonly COLLISION_MASK_ALL = 0xffffffff;
+
+  static readonly ACTIONS = {
+    FORWARD: 'forward',
+    BACKWARD: 'backward',
+    LEFT: 'left',
+    RIGHT: 'right',
+    JUMP: 'jump'
+  };
 
   public camera: THREE.PerspectiveCamera;
   public domElement: HTMLElement;
@@ -112,7 +121,11 @@ export class PlayerController {
 
   private setupInput() {
     const keyMap: Record<string, string> = {
-      keyw: 'forward', keys: 'backward', keya: 'left', keyd: 'right', space: 'jump',
+      keyw: PlayerController.ACTIONS.FORWARD,
+      keys: PlayerController.ACTIONS.BACKWARD,
+      keya: PlayerController.ACTIONS.LEFT,
+      keyd: PlayerController.ACTIONS.RIGHT,
+      space: PlayerController.ACTIONS.JUMP,
     };
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -214,9 +227,9 @@ export class PlayerController {
   }
 
   private updateInputState() {
-    this.input.forward = (this.keys.has('forward') ? 1 : 0) - (this.keys.has('backward') ? 1 : 0);
-    this.input.right = (this.keys.has('right') ? 1 : 0) - (this.keys.has('left') ? 1 : 0);
-    this.input.jump = this.keys.has('jump');
+    this.input.forward = (this.keys.has(PlayerController.ACTIONS.FORWARD) ? 1 : 0) - (this.keys.has(PlayerController.ACTIONS.BACKWARD) ? 1 : 0);
+    this.input.right = (this.keys.has(PlayerController.ACTIONS.RIGHT) ? 1 : 0) - (this.keys.has(PlayerController.ACTIONS.LEFT) ? 1 : 0);
+    this.input.jump = this.keys.has(PlayerController.ACTIONS.JUMP);
   }
 
   private scanSurroundings() {
@@ -257,7 +270,7 @@ export class PlayerController {
       this._downAxis,
       this._surfCheckShape,
       1.0,
-      4294967295,
+      PlayerController.COLLISION_MASK_ALL,
       true,
       undefined,
       this.collider.handle
