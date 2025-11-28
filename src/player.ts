@@ -22,9 +22,9 @@ export class PlayerController {
   static readonly SPAWN_POSITION = { x: 0, y: 3, z: 0 };
 
   static readonly GROUND_ACCELERATION = 14.0;
-  static readonly AIR_ACCELERATION = 200.0;
+  static readonly AIR_ACCELERATION = 300.0;
   static readonly GROUND_SPEED_LIMIT = 10.0;
-  static readonly AIR_SPEED_LIMIT = 0.9;
+  static readonly AIR_SPEED_LIMIT = 1.5;
   static readonly FRICTION = 6.0;
   static readonly JUMP_IMPULSE = 6.0;
   static readonly EYE_HEIGHT = 0.8;
@@ -52,6 +52,7 @@ export class PlayerController {
 
   private input: PlayerInput = { forward: 0, right: 0, jump: false };
   private keys = new Set<string>();
+  private jumpQueued: boolean = false;
 
   private pitch: number = 0;
   private yaw: number = 0;
@@ -59,6 +60,9 @@ export class PlayerController {
   private isGrounded: boolean = false;
   private isSurfing: boolean = false;
   private surfNormal = new THREE.Vector3();
+
+  private previousPosition = new THREE.Vector3();
+  private smoothedPosition = new THREE.Vector3();
 
   private _tempVec = new THREE.Vector3();
   private _tempVec2 = new THREE.Vector3();
@@ -117,6 +121,12 @@ export class PlayerController {
         .setRestitution(0.0),
       this.body
     );
+
+    this.previousPosition.set(
+      PlayerController.SPAWN_POSITION.x,
+      PlayerController.SPAWN_POSITION.y,
+      PlayerController.SPAWN_POSITION.z
+    );
   }
 
   private setupInput() {
@@ -129,9 +139,13 @@ export class PlayerController {
     };
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
-      if (e.code === 'KeyR') { this.respawn(); return; }
       const action = keyMap[e.code.toLowerCase()];
-      if (action) this.keys.add(action);
+      if (action) {
+        this.keys.add(action);
+        if (action === PlayerController.ACTIONS.JUMP) {
+          this.jumpQueued = true;
+        }
+      }
     });
 
     document.addEventListener('keyup', (e: KeyboardEvent) => {
@@ -151,16 +165,14 @@ export class PlayerController {
     });
   }
 
-  public update(dt: number) {
-    this.updateInputState();
-    this._euler.set(this.pitch, this.yaw, 0, 'YXZ');
-    this.camera.quaternion.setFromEuler(this._euler);
-    this.scanSurroundings();
+  public savePreviousPosition() {
+    const pos = this.body.translation();
+    this.previousPosition.set(pos.x, pos.y, pos.z);
+  }
 
-    if (this.body.translation().y < -20.0) {
-      this.respawn();
-      return;
-    }
+  public updatePhysics(dt: number) {
+    this.updateInputState();
+    this.scanSurroundings();
 
     const vel = this.body.linvel();
 
@@ -213,23 +225,44 @@ export class PlayerController {
     this.body.setLinvel(vel, true);
   }
 
-  public syncCamera() {
-    const pos = this.body.translation();
-    this.camera.position.set(pos.x, pos.y + PlayerController.EYE_HEIGHT, pos.z);
+  public updateVisuals(_dt: number) {
+    this._euler.set(this.pitch, this.yaw, 0, 'YXZ');
+    this.camera.quaternion.setFromEuler(this._euler);
+  }
+
+  public syncCamera(alpha: number) {
+    const currentPos = this.body.translation();
+    this._tempVec.set(currentPos.x, currentPos.y, currentPos.z);
+
+    this.smoothedPosition.lerpVectors(this.previousPosition, this._tempVec, alpha);
+
+    this.camera.position.set(
+      this.smoothedPosition.x,
+      this.smoothedPosition.y + PlayerController.EYE_HEIGHT,
+      this.smoothedPosition.z
+    );
   }
 
   public respawn() {
     this.body.setTranslation(PlayerController.SPAWN_POSITION, true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    this.pitch = 0; this.yaw = 0;
-    this.camera.quaternion.setFromEuler(new THREE.Euler(0, 0, 0, 'YXZ'));
-    this.syncCamera();
+    this.pitch = 0; this.yaw = Math.PI;
+
+    this.previousPosition.set(
+      PlayerController.SPAWN_POSITION.x,
+      PlayerController.SPAWN_POSITION.y,
+      PlayerController.SPAWN_POSITION.z
+    );
+
+    this.camera.quaternion.setFromEuler(new THREE.Euler(0, Math.PI, 0, 'YXZ'));
+    this.syncCamera(1.0);
   }
 
   private updateInputState() {
     this.input.forward = (this.keys.has(PlayerController.ACTIONS.FORWARD) ? 1 : 0) - (this.keys.has(PlayerController.ACTIONS.BACKWARD) ? 1 : 0);
     this.input.right = (this.keys.has(PlayerController.ACTIONS.RIGHT) ? 1 : 0) - (this.keys.has(PlayerController.ACTIONS.LEFT) ? 1 : 0);
-    this.input.jump = this.keys.has(PlayerController.ACTIONS.JUMP);
+    this.input.jump = this.keys.has(PlayerController.ACTIONS.JUMP) || this.jumpQueued;
+    this.jumpQueued = false;
   }
 
   private scanSurroundings() {
@@ -277,8 +310,7 @@ export class PlayerController {
     );
 
     if (shapeHit) {
-      const hit = shapeHit as any;
-      const n = hit.normal1 || hit.normal;
+      const n = shapeHit.normal1;
 
       if (!n) return;
 
@@ -304,8 +336,15 @@ export class PlayerController {
   private accelerate(vel: { x: number, z: number }, wishDir: THREE.Vector3, maxSpeed: number, accel: number, dt: number) {
     const currentSpeed = vel.x * wishDir.x + vel.z * wishDir.z;
     const addSpeed = maxSpeed - currentSpeed;
+
     if (addSpeed <= 0) return;
-    const accelSpeed = Math.min(accel * dt * maxSpeed, addSpeed);
+
+    let accelSpeed = accel * dt * maxSpeed;
+
+    if (accelSpeed > addSpeed) {
+      accelSpeed = addSpeed;
+    }
+
     vel.x += accelSpeed * wishDir.x;
     vel.z += accelSpeed * wishDir.z;
   }

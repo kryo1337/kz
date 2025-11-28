@@ -125,6 +125,12 @@ canvas {
   border-color: #ffffff;
 }
 
+.level-select-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
 .setting-row {
   display: flex;
   justify-content: space-between;
